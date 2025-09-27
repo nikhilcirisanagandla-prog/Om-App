@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "extra": {
+      "supabaseUrl": "https://fabgigjxgczadxokjxte.supabase.co",
+      "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhYmdpZ2p4Z2N6YWR4b2tqeHRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxMTY0MzUsImV4cCI6MjA3MjY5MjQzNX0.vglAmWo_7iQTSotaJxkySyJYbwYzulUV6himDQarNTw"
+    },
+    "name": "Om: Hindu Faith Companion",
+    "slug": "om-hindu-faith-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#87CEEB"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#87CEEB"
+      },
+      "package": "om.app"
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAutoLinking": false
+        }
+      ]
+    ],
+    "sdkVersion": "51.0.0"
+  }
+}

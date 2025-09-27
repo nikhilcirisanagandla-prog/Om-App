@@ -1,0 +1,91 @@
+// utils/generateHolyResponse.js
+// Generates holy, scripture-based responses for the Divine Chat.
+// Mode 1: Simulated (local, fast, no API).
+// Mode 2: AI (OpenAI GPT; requires expo install openai and API key).
+
+import scriptures from '../data/scriptures.json';  // Import verses for context
+
+// Simulated holy responses (expandable; matches user queries to wisdom)
+const holyResponses = {
+  yoga: {
+    response: 'Yoga is the union of body, mind, and spirit with the Divine. As Patanjali teaches in the Yoga Sutras, "Yogah chitta vritti nirodhah" – Yoga is the cessation of mind fluctuations. Practice asanas daily, breathe deeply, and chant Om for inner peace. With your streak of {streak} days, you are on the path to samadhi. ॐ',
+    source: 'Yoga Sutras 1.2'
+  },
+  dharma: {
+    response: 'Dharma is the eternal law of righteousness. In the Bhagavad Gita, Lord Krishna advises Arjuna: "Sva-dharmam api caveksya na vikampitum arhasi" – Do not swerve from your duty. Live with ahimsa (non-violence), satya (truth), and seva (service). Align your actions with cosmic order for moksha. Your interest in {interest} guides you well. Shanti, shanti, shanti.',
+    source: 'Bhagavad Gita 2.47'
+  },
+  mantra: {
+    response: 'Mantras are sacred vibrations that awaken the Atman. Chant "Om Namah Shivaya" for transformation or "Gayatri Mantra" for wisdom: "Om Bhur Bhuva Swaha..." Repeat 108 times daily. As your chosen mantra is {mantra}, let it resonate in meditation. May the Divine light your path. ॐ Mani Padme Hum.',
+    source: 'Rig Veda'
+  },
+  moksha: {
+    response: 'Moksha is liberation from samsara, the cycle of birth and death. Through jnana (knowledge), bhakti (devotion), karma (action), or raja yoga, realize the Brahman within. The Upanishads declare: "Tat Tvam Asi" – Thou art That. With devotion, even a single lifetime suffices. Continue your journey, seeker. ॐ',
+    source: 'Chandogya Upanishad 6.8.7'
+  },
+  default: {
+    response: 'Beloved child of the Divine, all questions lead to the One. Reflect on this: "Aham Brahmasmi" – I am the Infinite. Draw from the Vedas for guidance. What specific path calls to you – yoga, bhakti, or jnana? Your streak of {streak} days shows commitment. Seek within, and the Guru within shall answer. Om Shanti Shanti Shanti.',
+    source: 'Brihadaranyaka Upanishad'
+  }
+};
+
+// Function to generate response (simulated mode)
+export function generateHolyResponse(query, userContext = {}) {
+  const { streak = 1, profile = {} } = userContext;
+  const interest = profile.interest || 'enlightenment';
+  const mantra = profile.mantra || 'Om';
+
+  // Simple keyword matching (expand with fuzzy search later)
+  const lowerQuery = query.toLowerCase();
+  let key = 'default';
+  if (lowerQuery.includes('yoga')) key = 'yoga';
+  else if (lowerQuery.includes('dharma') || lowerQuery.includes('duty')) key = 'dharma';
+  else if (lowerQuery.includes('mantra') || lowerQuery.includes('chant')) key = 'mantra';
+  else if (lowerQuery.includes('moksha') || lowerQuery.includes('liberation')) key = 'moksha';
+
+  const baseResponse = holyResponses[key].response;
+  const source = holyResponses[key].source;
+
+  // Personalize with user context
+  let personalized = baseResponse
+    .replace('{streak}', streak)
+    .replace('{interest}', interest)
+    .replace('{mantra}', mantra);
+
+  // Add random scripture for depth
+  const randomVerse = scriptures[Math.floor(Math.random() * scriptures.length)];
+  personalized += `\n\nReflect: "${randomVerse.text}" – ${randomVerse.source}`;
+
+  return {
+    text: personalized,
+    source,
+    timestamp: new Date().toISOString()
+  };
+}
+
+// Optional AI Mode (Uncomment and install: npx expo install openai)
+// export async function generateHolyResponseAI(query, userContext = {}, apiKey) {
+//   if (!apiKey) throw new Error('OpenAI API key required');
+//
+//   const OpenAI = require('openai');
+//   const openai = new OpenAI({ apiKey });
+//
+//   const { streak = 1, profile = {} } = userContext;
+//   const prompt = `You are Krishna, a wise Guru from Hindu scriptures. Respond spiritually to: "${query}".
+//   User context: Streak ${streak} days, interest "${profile.interest || 'spirituality'}", mantra "${profile.mantra || 'Om'}".
+//   Use Sanskrit terms, quote Gita/Upanishads/Vedas. Keep response 100-200 words, end with ॐ. Be compassionate and enlightening.`;
+//
+//   try {
+//     const completion = await openai.chat.completions.create({
+//       model: 'gpt-3.5-turbo',
+//       messages: [{ role: 'system', content: prompt }],
+//       max_tokens: 200
+//     });
+//
+//     const response = completion.choices[0].message.content;
+//     return { text: response, source: 'AI Guru (Krishna Mode)', timestamp: new Date().toISOString() };
+//   } catch (error) {
+//     console.error('AI Response Error:', error);
+//     return generateHolyResponse(query, userContext);  // Fallback to simulated
+//   }
+// }
