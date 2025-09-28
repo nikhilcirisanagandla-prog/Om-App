@@ -1,23 +1,24 @@
-// screens/LoginScreen.js
+// screens/SignupScreen.js
 
 import React, { useState } from 'react';
 import { View, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { TextInput, Button, Text } from 'react-native-paper';
 import { supabase } from '../utils/supabase';
 
-export default function LoginScreen({ navigation }) {
+export default function SignupScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleSignUp = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
-      // On success, RootNavigator will detect user and navigate to onboarding or main
+      Alert.alert('Success', 'Account created! Please log in to continue.');
+      navigation.navigate('Login');
     } catch (error) {
-      Alert.alert('Login failed', error.message);
+      Alert.alert('Signup failed', error.message);
     } finally {
       setLoading(false);
     }
@@ -28,7 +29,7 @@ export default function LoginScreen({ navigation }) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.title}>Welcome to Om</Text>
+      <Text style={styles.title}>Create your Om account</Text>
       <TextInput
         label="Email"
         value={email}
@@ -46,11 +47,11 @@ export default function LoginScreen({ navigation }) {
         mode="outlined"
         style={styles.input}
       />
-      <Button mode="contained" onPress={handleLogin} loading={loading} disabled={loading}>
-        Log In
+      <Button mode="contained" onPress={handleSignUp} loading={loading} disabled={loading}>
+        Sign Up
       </Button>
-      <Button onPress={() => navigation.navigate('Signup')} style={styles.link}>
-        Don't have an account? Create one
+      <Button onPress={() => navigation.goBack()} style={styles.link}>
+        Back to Login
       </Button>
     </KeyboardAvoidingView>
   );

@@ -41,8 +41,9 @@
         {
           "configureAutoLinking": false
         }
-      ]
+      ],
+      "expo-font"
     ],
-    "sdkVersion": "51.0.0"
+    "sdkVersion": "54.0.0"
   }
 }

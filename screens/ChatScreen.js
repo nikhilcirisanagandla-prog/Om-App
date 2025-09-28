@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../utils/supabase';
-import { generateHolyResponse } from '../utils/aiHolyChat';
-import { useAuth } from '../contexts/AuthContext';
+import { generateHolyResponse } from '../components/generateHolyResponse';
+import { useAuth } from '../components/AuthContext';
 
 export default function ChatScreen({ streak }) {
   const [input, setInput] = useState('');
