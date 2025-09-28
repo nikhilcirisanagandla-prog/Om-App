@@ -1,241 +1,255 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
-import { useAuth } from '../components/AuthContext';
-import { generateHolyResponse } from '../utils/generateHolyResponse';  // Holy response utility
-// import { supabase } from '../utils/supabase';  // Uncomment for chat history sync
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { supabase } from '../utils/supabase';
+import { generateHolyResponse } from '../utils/aiHolyChat';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ChatScreen({ streak }) {
-  const [message, setMessage] = useState('');
-  const [responses, setResponses] = useState([]);  // Local chat history
-  const [isLoading, setIsLoading] = useState(false);
+  const [input, setInput] = useState('');
+  const [responses, setResponses] = useState([]);
+  const [loading, setLoading] = useState(false);
   const { profile, user } = useAuth();
-  const userContext = { streak, profile };
+  const userContext = { streak, profile };  // For personalization (deity, practice)
 
-  // Optional: Load chat history from Supabase on mount (uncomment)
-  // useEffect(() => {
-  //   if (user) {
-  //     const fetchHistory = async () => {
-  //       const { data } = await supabase
-  //         .from('chat_history')
-  //         .select('*')
-  //         .eq('user_id', user.id)
-  //         .order('timestamp', { ascending: true });
-  //       if (data) {
-  //         setResponses(data.map(item => ({
-  //           user: item.message,
-  //           guru: item.response,
-  //           timestamp: new Date(item.timestamp).toLocaleTimeString()
-  //         })));
-  //       }
-  //     };
-  //     fetchHistory();
-  //   }
-  // }, [user]);
+  // Load chat history from Supabase on mount
+  useEffect(() => {
+    if (user) {
+      const fetchHistory = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('chat_history')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('timestamp', { ascending: true })
+            .limit(50);  // Limit for performance
+          if (error) {
+            console.warn('Chat history fetch error:', error.message);
+          } else if (data) {
+            setResponses(
+              data.map((item) => ({
+                id: item.id,
+                user: item.message,
+                guru: item.response,
+                timestamp: new Date(item.timestamp).toLocaleTimeString(),
+                isUser: true,  // Fixed: For rendering user messages
+              }))
+            );
+          }
+        } catch (err) {
+          console.error('Fetch history error:', err);
+        }
+      };
+      fetchHistory();
+    }
+  }, [user]);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    const userMessage = input.trim();
+    setInput('');
+    setLoading(true);
 
-    const userMsg = message.trim();
-    setIsLoading(true);
+    // Add user message to list
+    const userEntry = {
+      id: Date.now().toString(),
+      user: userMessage,
+      guru: '',
+      timestamp: new Date().toLocaleTimeString(),
+      isUser: true,  // Fixed: User message
+    };
+    const tempResponses = [...responses, userEntry];
+    setResponses(tempResponses);
 
-    // Add user message immediately
-    setResponses(prev => [...prev, { 
-      user: userMsg, 
-      timestamp: new Date().toLocaleTimeString() 
-    }]);
+    try {
+      // Generate personalized guru response
+      const guruResponse = await generateHolyResponse(userMessage, userContext);
+      const guruEntry = {
+        id: (Date.now() + 1).toString(),
+        user: '',
+        guru: guruResponse,
+        timestamp: new Date().toLocaleTimeString(),
+        isUser: false,  // Fixed: Guru message
+      };
 
-    // Generate holy response (simulated; personalized for Hinduism/Ramayan)
-    const holyReply = generateHolyResponse(userMsg, userContext);
+      // Update list with response
+      const updatedResponses = [...tempResponses.slice(0, -1), guruEntry];
+      setResponses(updatedResponses);
 
-    // Simulate divine delay
-    setTimeout(() => {
-      setResponses(prev => [...prev, { 
-        guru: holyReply.text, 
-        source: holyReply.source, 
-        timestamp: new Date(holyReply.timestamp).toLocaleTimeString() 
-      }]);
-      
-      // Optional: Save to Supabase (uncomment)
-      // if (user) {
-      //   supabase.from('chat_history').insert({
-      //     user_id: user.id,
-      //     message: userMsg,
-      //     response: holyReply.text
-      //   }).catch(console.error);
-      // }
-
-      Alert.alert('Guru Speaks ॐ', 'Holy wisdom received. Reflect and apply to your faith.');
-      setIsLoading(false);
-    }, 1000);
-
-    setMessage('');
+      // Save to Supabase (if logged in)
+      if (user) {
+        const { error } = await supabase.from('chat_history').insert([
+          {
+            user_id: user.id,
+            message: userMessage,
+            response: guruResponse,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        if (error) {
+          console.warn('Save chat history error:', error.message);
+          // Still show response locally
+        }
+      }
+    } catch (err) {
+      console.error('Generate response error:', err);
+      const errorEntry = {
+        id: (Date.now() + 1).toString(),
+        user: '',
+        guru: 'ॐ Apologies, divine guidance is temporarily unavailable. Please try again. Shanti.',
+        timestamp: new Date().toLocaleTimeString(),
+        isUser: false,  // Fixed: Error as guru message
+      };
+      setResponses([...tempResponses.slice(0, -1), errorEntry]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Holy Guidance (Streak: {streak})</Text>
-      <Text style={styles.subtitle}>
-        Ask about dharma, Rama, festivals, puja, or your deity. Speak with reverence.
+  const renderItem = ({ item }) => (
+    <View style={item.isUser ? styles.userMessage : styles.guruMessage}>
+      <Text style={item.isUser ? styles.userText : styles.guruText}>
+        {item.isUser ? item.user : item.guru}
       </Text>
-      <ScrollView 
-        style={styles.chat} 
-        contentContainerStyle={{ paddingBottom: 20 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {responses.length === 0 ? (
-          <Text style={styles.empty}>Begin your query to the Divine... e.g., "Guide me on Ramayan" or "How to perform aarti?"</Text>
-        ) : (
-          responses.map((r, i) => (
-            <View key={i} style={styles.message}>
-              {r.user && (
-                <View style={styles.userBubble}>
-                  <Text style={styles.userMsg}>You ({r.timestamp}): {r.user}</Text>
-                </View>
-              )}
-              {r.guru && (
-                <View style={styles.guruBubble}>
-                  <Text style={styles.guruHeader}>Guru:</Text>
-                  <Text style={styles.guruText}>{r.guru}</Text>
-                  <Text style={styles.source}>- {r.source} ({r.timestamp})</Text>
-                </View>
-              )}
-            </View>
-          ))
-        )}
-        {isLoading && <Text style={styles.loading}>The Divine contemplates... ॐ</Text>}
-      </ScrollView>
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your sacred question..."
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          onSubmitEditing={handleSend}
-        />
-        <TouchableOpacity 
-          style={[styles.button, isLoading && styles.disabledButton]} 
-          onPress={handleSend} 
-          disabled={isLoading || !message.trim()}
-        >
-          <Text style={styles.buttonText}>Invoke Wisdom</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.timestamp}>{item.timestamp}</Text>
     </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Holy Guidance (Streak: {streak})</Text>
+          {profile?.deity && (
+            <Text style={styles.deityText}>Dedicated to {profile.deity}</Text>
+          )}
+        </View>
+
+        <FlatList
+          data={responses}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          style={styles.chatList}
+          inverted  // Newest at bottom
+        />
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask about dharma, mantras, or scriptures..."
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={loading}>
+            <Text style={styles.sendText}>{loading ? '...' : 'Send'}</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#87CEEB'  // Sky blue
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
-  title: { 
-    fontSize: 24, 
-    fontWeight: 'bold', 
-    color: '#FFD700',  // Gold
-    textAlign: 'center', 
-    marginVertical: 10,
-    paddingTop: 10
+  keyboardView: {
+    flex: 1,
   },
-  subtitle: { 
-    fontSize: 14, 
-    color: '#FFFFFF', 
-    textAlign: 'center', 
-    marginHorizontal: 20,
-    marginBottom: 10,
-    fontStyle: 'italic'
+  header: {
+    padding: 16,
+    backgroundColor: '#4a90e2',  // Sky blue theme
+    alignItems: 'center',
   },
-  chat: { 
-    flex: 1, 
-    marginHorizontal: 10,
-    marginVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)'
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
   },
-  empty: { 
-    fontSize: 16, 
-    color: '#FFFFFF', 
-    textAlign: 'center', 
-    marginTop: 50,
-    fontStyle: 'italic'
+  deityText: {
+    fontSize: 14,
+    color: 'white',
+    marginTop: 4,
   },
-  message: { 
-    marginVertical: 5 
+  chatList: {
+    flex: 1,
+    padding: 16,
   },
-  userBubble: { 
-    alignSelf: 'flex-end', 
-    backgroundColor: 'white', 
-    padding: 10, 
-    borderRadius: 8,
-    maxWidth: '80%'
-  },
-  userMsg: { 
-    fontWeight: 'bold', 
-    color: '#FFD700'  // Gold user text
-  },
-  guruBubble: { 
-    alignSelf: 'flex-start', 
-    backgroundColor: 'rgba(255,215,0,0.1)',  // Light gold
-    padding: 15, 
-    borderRadius: 8, 
-    borderLeftWidth: 4, 
-    borderLeftColor: '#FFD700',
-    maxWidth: '80%'
-  },
-  guruHeader: { 
-    fontWeight: 'bold', 
-    color: '#FFD700',  // Gold header
-    fontSize: 16,
-    marginBottom: 5
-  },
-  guruText: { 
-    fontStyle: 'italic', 
-    color: '#4A148C',  // Deep purple for wisdom
-    lineHeight: 20,
-    marginBottom: 5
-  },
-  source: { 
-    fontSize: 12, 
-    color: '#795548', 
-    fontStyle: 'italic', 
+  userMessage: {
     alignSelf: 'flex-end',
-    marginTop: 5
+    backgroundColor: '#4a90e2',
+    padding: 12,
+    borderRadius: 18,
+    marginBottom: 8,
+    maxWidth: '80%',
   },
-  loading: { 
-    fontSize: 14, 
-    color: '#FFFFFF', 
-    textAlign: 'center', 
-    fontStyle: 'italic',
-    marginVertical: 10
+  guruMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 18,
+    marginBottom: 8,
+    maxWidth: '80%',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4a90e2',
   },
-  inputContainer: { 
-    flexDirection: 'row', 
-    padding: 10,
-    backgroundColor: '#87CEEB'
+  userText: {
+    color: 'white',
+    fontSize: 16,
   },
-  input: { 
-    flex: 1, 
-    borderWidth: 1, 
-    borderColor: '#FFD700', 
-    padding: 15, 
-    borderRadius: 8, 
-    backgroundColor: 'white', 
-    minHeight: 50,
-    marginRight: 10
+  guruText: {
+    color: '#333',
+    fontSize: 16,
+    lineHeight: 22,
   },
-  button: { 
-    backgroundColor: '#FFD700',  // Gold
-    padding: 15, 
-    borderRadius: 8, 
+  timestamp: {
+    fontSize: 12,
+    color: '#999',
+    alignSelf: item.isUser ? 'flex-end' : 'flex-start',  // Fixed: Reference to item.isUser
+    marginTop: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginRight: 8,
+    fontSize: 16,
+    maxHeight: 100,
+  },
+  sendButton: {
+    backgroundColor: '#4a90e2',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     justifyContent: 'center',
-    minWidth: 100
   },
-  disabledButton: { 
-    opacity: 0.7 
-  },
-  buttonText: { 
-    color: '#87CEEB',  // Sky blue
-    fontWeight: 'bold', 
-    textAlign: 'center'
+  sendText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });

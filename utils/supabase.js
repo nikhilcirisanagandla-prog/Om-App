@@ -1,0 +1,7 @@
+import { createClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
+
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || 'https://fabgigjxgczadxokjxte.supabase.co';
+const supabaseKey = Constants.expoConfig?.extra?.supabaseKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhYmdpZ2p4Z2N6YWR4b2tqeHRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxMTY0MzUsImV4cCI6MjA3MjY5MjQzNX0.vglAmWo_7iQTSotaJxkySyJYbwYzulUV6himDQarNTw';
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
