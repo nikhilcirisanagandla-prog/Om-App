@@ -9,118 +9,202 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../utils/supabase';
 import { generateHolyResponse } from '../utils/aiHolyChat';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function ChatScreen({ streak }) {
   const [input, setInput] = useState('');
-  const [responses, setResponses] = useState([]);
+  const [messages, setMessages] = useState([]);  // Renamed from 'responses' for clarity
   const [loading, setLoading] = useState(false);
   const { profile, user } = useAuth();
-  const userContext = { streak, profile };  // For personalization (deity, practice)
+  const userContext = { streak, profile };
 
-  // Load chat history from Supabase on mount
+  // Load history: Local first, then merge Supabase
   useEffect(() => {
-    if (user) {
-      const fetchHistory = async () => {
-        try {
+    const loadHistory = async () => {
+      try {
+        const localKey = `chat_${user?.id || 'guest'}`;
+        const localData = await AsyncStorage.getItem(localKey);
+        let localMessages = [];
+        if (localData) {
+          localMessages = JSON.parse(localData);
+          setMessages(localMessages);
+        }
+
+        // Sync Supabase (if logged in)
+        if (user) {
           const { data, error } = await supabase
             .from('chat_history')
             .select('*')
             .eq('user_id', user.id)
-            .order('timestamp', { ascending: true })
-            .limit(50);  // Limit for performance
+            .order('created_at', { ascending: true })  // Use 'created_at' if 'timestamp' not set
+            .limit(50);
           if (error) {
-            console.warn('Chat history fetch error:', error.message);
-          } else if (data) {
-            setResponses(
-              data.map((item) => ({
+            console.warn('Supabase fetch error:', error.message);
+          } else if (data && data.length > 0) {
+            const supabaseMessages = [];
+            data.forEach((item) => {
+              supabaseMessages.push({
                 id: item.id,
-                user: item.message,
-                guru: item.response,
-                timestamp: new Date(item.timestamp).toLocaleTimeString(),
-                isUser: true,  // Fixed: For rendering user messages
-              }))
-            );
+                type: 'user',
+                text: item.message,
+                timestamp: new Date(item.created_at).toLocaleTimeString(),
+              });
+              supabaseMessages.push({
+                id: `${item.id}_guru`,
+                type: 'guru',
+                text: item.response,
+                timestamp: new Date(item.created_at).toLocaleTimeString(),
+              });
+            });
+            // Merge: Add Supabase if not in local (avoid duplicates by text + timestamp)
+            const merged = [...localMessages];
+            supabaseMessages.forEach((supaMsg) => {
+              if (!merged.find((locMsg) => locMsg.text === supaMsg.text && locMsg.timestamp === supaMsg.timestamp)) {
+                merged.push(supaMsg);
+              }
+            });
+            // Sort by timestamp
+            merged.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            setMessages(merged);
+            await AsyncStorage.setItem(localKey, JSON.stringify(merged));
           }
-        } catch (err) {
-          console.error('Fetch history error:', err);
         }
-      };
-      fetchHistory();
-    }
+      } catch (err) {
+        console.error('Load history error:', err);
+      }
+    };
+    loadHistory();
   }, [user]);
+
+  // Save message pair to local and Supabase
+  const saveMessagePair = async (userText, guruText) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const userMsg = {
+      id: `user_${Date.now()}`,
+      type: 'user',
+      text: userText,
+      timestamp,
+    };
+    const guruMsg = {
+      id: `guru_${Date.now()}`,
+      type: 'guru',
+      text: guruText,
+      timestamp,
+    };
+    const updatedMessages = [...messages, userMsg, guruMsg];
+    setMessages(updatedMessages);
+
+    // Local save
+    const localKey = `chat_${user?.id || 'guest'}`;
+    await AsyncStorage.setItem(localKey, JSON.stringify(updatedMessages));
+
+    // Supabase save (one row per pair)
+    if (user) {
+      const { error } = await supabase.from('chat_history').insert([{
+        user_id: user.id,
+        message: userText,
+        response: guruText,
+        created_at: new Date().toISOString(),  // Use 'created_at' for Supabase
+      }]);
+      if (error) {
+        console.warn('Supabase save error:', error.message);
+      }
+    }
+  };
+
+  // Delete message (removes pair if guru, or single if user)
+  const deleteMessage = async (msgId, msgType, msgText) => {
+    Alert.alert(
+      'Delete Message',
+      `Remove this ${msgType === 'guru' ? 'chat exchange' : 'message'} from history?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            let updatedMessages = [...messages];
+            // Remove guru and its user pair if deleting guru
+            if (msgType === 'guru') {
+              const userIndex = updatedMessages.findIndex((m) => m.type === 'user' && m.timestamp === msgId.timestamp);
+              if (userIndex > -1) {
+                updatedMessages.splice(userIndex, 1);
+              }
+            }
+            // Remove the message itself
+            updatedMessages = updatedMessages.filter((m) => m.id !== msgId);
+            setMessages(updatedMessages);
+
+            // Local save
+            const localKey = `chat_${user?.id || 'guest'}`;
+            await AsyncStorage.setItem(localKey, JSON.stringify(updatedMessages));
+
+            // Supabase delete (match by message text)
+            if (user) {
+              await supabase
+                .from('chat_history')
+                .delete()
+                .eq('user_id', user.id)
+                .eq('message', msgText);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
-    const userMessage = input.trim();
+    const userText = input.trim();
     setInput('');
     setLoading(true);
 
-    // Add user message to list
-    const userEntry = {
-      id: Date.now().toString(),
-      user: userMessage,
-      guru: '',
+    // Add user message temporarily
+    const userMsg = {
+      id: `user_${Date.now()}`,
+      type: 'user',
+      text: userText,
       timestamp: new Date().toLocaleTimeString(),
-      isUser: true,  // Fixed: User message
     };
-    const tempResponses = [...responses, userEntry];
-    setResponses(tempResponses);
+    setMessages((prev) => [...prev, userMsg]);
 
     try {
-      // Generate personalized guru response
-      const guruResponse = await generateHolyResponse(userMessage, userContext);
-      const guruEntry = {
-        id: (Date.now() + 1).toString(),
-        user: '',
-        guru: guruResponse,
-        timestamp: new Date().toLocaleTimeString(),
-        isUser: false,  // Fixed: Guru message
-      };
-
-      // Update list with response
-      const updatedResponses = [...tempResponses.slice(0, -1), guruEntry];
-      setResponses(updatedResponses);
-
-      // Save to Supabase (if logged in)
-      if (user) {
-        const { error } = await supabase.from('chat_history').insert([
-          {
-            user_id: user.id,
-            message: userMessage,
-            response: guruResponse,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        if (error) {
-          console.warn('Save chat history error:', error.message);
-          // Still show response locally
-        }
-      }
+      const guruText = await generateHolyResponse(userText, userContext);
+      await saveMessagePair(userText, guruText);
     } catch (err) {
       console.error('Generate response error:', err);
-      const errorEntry = {
-        id: (Date.now() + 1).toString(),
-        user: '',
-        guru: 'ॐ Apologies, divine guidance is temporarily unavailable. Please try again. Shanti.',
-        timestamp: new Date().toLocaleTimeString(),
-        isUser: false,  // Fixed: Error as guru message
-      };
-      setResponses([...tempResponses.slice(0, -1), errorEntry]);
+      await saveMessagePair(userText, 'ॐ Apologies, divine guidance is temporarily unavailable. Please try again. Shanti.');
     } finally {
       setLoading(false);
     }
   };
 
   const renderItem = ({ item }) => (
-    <View style={item.isUser ? styles.userMessage : styles.guruMessage}>
-      <Text style={item.isUser ? styles.userText : styles.guruText}>
-        {item.isUser ? item.user : item.guru}
-      </Text>
-      <Text style={styles.timestamp}>{item.timestamp}</Text>
+    <View
+      style={[
+        styles.messageContainer,
+        item.type === 'user' ? styles.userContainer : styles.guruContainer,
+      ]}
+    >
+      <View style={item.type === 'user' ? styles.userMessage : styles.guruMessage}>
+        <Text style={item.type === 'user' ? styles.userText : styles.guruText}>
+          {item.text}
+        </Text>
+        <Text style={styles.timestamp}>{item.timestamp}</Text>
+      </View>
+      {item.type === 'guru' && (  // Delete button only on guru messages (deletes pair)
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => deleteMessage(item, item.type, item.text)}
+        >
+          <Text style={styles.deleteText}>Delete</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -138,11 +222,11 @@ export default function ChatScreen({ streak }) {
         </View>
 
         <FlatList
-          data={responses}
+          data={messages}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           style={styles.chatList}
-          inverted  // Newest at bottom
+          inverted  // Newest messages at bottom
         />
 
         <View style={styles.inputContainer}>
@@ -154,7 +238,11 @@ export default function ChatScreen({ streak }) {
             multiline
             maxLength={500}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={loading}>
+          <TouchableOpacity
+            style={[styles.sendButton, loading && styles.disabledButton]}
+            onPress={handleSend}
+            disabled={loading}
+          >
             <Text style={styles.sendText}>{loading ? '...' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
@@ -173,7 +261,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
-    backgroundColor: '#4a90e2',  // Sky blue theme
+    backgroundColor: '#4a90e2',
     alignItems: 'center',
   },
   headerTitle: {
@@ -190,20 +278,27 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  messageContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'flex-end',
+  },
+  userContainer: {
+    justifyContent: 'flex-end',
+  },
+  guruContainer: {
+    justifyContent: 'flex-start',
+  },
   userMessage: {
-    alignSelf: 'flex-end',
     backgroundColor: '#4a90e2',
     padding: 12,
     borderRadius: 18,
-    marginBottom: 8,
     maxWidth: '80%',
   },
   guruMessage: {
-    alignSelf: 'flex-start',
     backgroundColor: 'white',
     padding: 12,
     borderRadius: 18,
-    marginBottom: 8,
     maxWidth: '80%',
     borderLeftWidth: 4,
     borderLeftColor: '#4a90e2',
@@ -220,8 +315,21 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 12,
     color: '#999',
-    alignSelf: item.isUser ? 'flex-end' : 'flex-start',  // Fixed: Reference to item.isUser
     marginTop: 4,
+    marginLeft: 8,  // Slight indent
+  },
+  deleteButton: {
+    backgroundColor: '#ff6b6b',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  deleteText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -247,6 +355,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     justifyContent: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
   sendText: {
     color: 'white',
