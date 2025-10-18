@@ -89,10 +89,4 @@ double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = false
 
-[edge_functions]
-enabled = true
-# Configure one of the supported request policies: `per_worker`, `oneshot`, `null`.
-# Use `null` to prevent Supabase CLI from overriding the default policy of each edge function.
-policy = "per_worker"
-# Relative path to the import map for Deno functions.
-# import_map = "./supabase/functions/import_map.json"
+# Edge Functions configuration removed - not needed for deployment
