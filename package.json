@@ -5,7 +5,13 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "supabase:deploy-all": "supabase functions deploy",
+    "supabase:deploy-webhook": "supabase functions deploy stripe-webhook",
+    "supabase:deploy-checkout": "supabase functions deploy create-checkout-session",
+    "supabase:logs": "supabase functions logs",
+    "supabase:list": "supabase functions list",
+    "supabase:link": "supabase link --project-ref fabgigjxgczadxokjxte"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
