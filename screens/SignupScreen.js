@@ -13,8 +13,26 @@ export default function SignupScreen({ navigation }) {
   const handleSignUp = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      // Create auth user
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
+
+      // Create initial profile entry to prevent database errors
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: data.user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          // Don't throw - user is created, they can complete profile in onboarding
+        }
+      }
+
       Alert.alert('Success', 'Account created! Please log in to continue.');
       navigation.navigate('Login');
     } catch (error) {
