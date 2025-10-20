@@ -322,11 +322,38 @@ const styles = StyleSheet.create({
   settingText: {
     flex: 1,
   },
-    settingLabel: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#FF9800',
-    },
-  });
-  
-  export default ProfileScreen;
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  settingDescription: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  settingsButton: {
+    marginTop: 15,
+    borderColor: '#FF9800',
+  },
+  accountButton: {
+    marginBottom: 10,
+    borderColor: '#FF9800',
+  },
+  logoutButton: {
+    backgroundColor: '#f44336',
+    marginTop: 10,
+  },
+  logoutLabel: {
+    color: 'white',
+  },
+  footer: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 20,
+  },
+});
+
+export default ProfileScreen;

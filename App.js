@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Provider as PaperProvider } from 'react-native-paper';
 
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { useStreak } from './components/UseStreak';
 
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
@@ -21,11 +22,17 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
+  const { streak, updateStreak } = useStreak();
+
   return (
     <Tab.Navigator>
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Dashboard">
+        {(props) => <DashboardScreen {...props} streak={streak} updateStreak={updateStreak} />}
+      </Tab.Screen>
       <Tab.Screen name="Holy Guidance" component={ChatScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile">
+        {(props) => <ProfileScreen {...props} streak={streak} />}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }
